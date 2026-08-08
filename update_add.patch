@@ -1,0 +1,114 @@
+--- app/src/main/java/com/example/ui/AddProductScreen.kt
++++ app/src/main/java/com/example/ui/AddProductScreen.kt
+@@ -37,18 +37,34 @@
+ import androidx.compose.ui.text.font.FontWeight
+ import androidx.compose.ui.unit.dp
+ import coil.compose.AsyncImage
++import androidx.lifecycle.compose.collectAsStateWithLifecycle
++import androidx.compose.runtime.LaunchedEffect
+ import com.example.utils.ImageUtils
+ 
+ @OptIn(ExperimentalMaterial3Api::class)
+ @Composable
+ fun AddProductScreen(
++    productId: Int? = null,
+     viewModel: ProductViewModel,
+     onNavigateBack: () -> Unit
+ ) {
++    val products by viewModel.products.collectAsStateWithLifecycle()
++    val productToEdit = remember(productId, products) { products.find { it.id == productId } }
++
+     var name by remember { mutableStateOf("") }
+     var otherNames by remember { mutableStateOf("") }
+     var location by remember { mutableStateOf("Magasin 1") }
+     var quantity by remember { mutableStateOf("") }
+     var expirationDate by remember { mutableStateOf("") }
+     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
++    var existingImagePath by remember { mutableStateOf<String?>(null) }
++
++    LaunchedEffect(productToEdit) {
++        productToEdit?.let {
++            name = it.name
++            otherNames = it.otherNames
++            location = it.location
++            quantity = it.quantity.toString()
++            expirationDate = it.expirationDate
++            existingImagePath = it.imagePath
++        }
++    }
+ 
+     val context = LocalContext.current
+     val photoPickerLauncher = rememberLauncherForActivityResult(
+@@ -62,7 +78,7 @@
+             TopAppBar(
+                 title = { 
+                      Text(
+-                        "Ajouter un produit",
++                        if (productId == null) "Ajouter un produit" else "Modifier le produit",
+                         style = MaterialTheme.typography.titleLarge,
+                         fontWeight = FontWeight.Bold
+                     ) 
+@@ -95,7 +111,7 @@
+                 ) {
+                     if (selectedImageUri != null) {
+                         AsyncImage(
+-                            model = selectedImageUri,
++                            model = selectedImageUri ?: existingImagePath,
+                             contentDescription = "Selected Image",
+                             contentScale = ContentScale.Crop,
+                             modifier = Modifier.fillMaxSize()
++                    } else if (existingImagePath != null) {
++                        AsyncImage(
++                            model = java.io.File(existingImagePath!!),
++                            contentDescription = "Existing Image",
++                            contentScale = ContentScale.Crop,
++                            modifier = Modifier.fillMaxSize()
++                        )
+                     } else {
+                         Column(
+                             horizontalAlignment = Alignment.CenterHorizontally
+@@ -213,20 +229,32 @@
+                 )
+ 
+                 Spacer(modifier = Modifier.height(32.dp))
+                 Button(
+                     onClick = {
+                         if (name.isNotBlank()) {
+                             val imagePath = selectedImageUri?.let { uri ->
+                                 ImageUtils.saveImageToInternalStorage(context, uri)
+-                            }
+-                            viewModel.addProduct(
+-                                name = name,
+-                                otherNames = otherNames,
+-                                location = location,
+-                                quantity = quantity.toIntOrNull() ?: 0,
+-                                expirationDate = expirationDate,
+-                                imagePath = imagePath
+-                            )
++                            } ?: existingImagePath
++                            if (productId == null) {
++                                viewModel.addProduct(
++                                    name = name,
++                                    otherNames = otherNames,
++                                    location = location,
++                                    quantity = quantity.toIntOrNull() ?: 0,
++                                    expirationDate = expirationDate,
++                                    imagePath = imagePath
++                                )
++                            } else {
++                                productToEdit?.let {
++                                    viewModel.updateProduct(it.copy(
++                                        name = name,
++                                        otherNames = otherNames,
++                                        location = location,
++                                        quantity = quantity.toIntOrNull() ?: 0,
++                                        expirationDate = expirationDate,
++                                        imagePath = imagePath
++                                    ))
++                                }
++                            }
+                             onNavigateBack()
+                         }
+                     },
+                     modifier = Modifier.fillMaxWidth().height(56.dp),
+                     shape = RoundedCornerShape(16.dp),
